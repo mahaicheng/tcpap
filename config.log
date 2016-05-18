@@ -900,8 +900,8 @@ configure:6914: $? = 0
 configure:6926: result: yes
 configure:6839: checking for fesetprecision
 configure:6896: gcc -o conftest -g -O2   conftest.c -lm  >&5
-/tmp/ccummiwh.o:(.data+0x0): undefined reference to `fesetprecision'
-/tmp/ccummiwh.o: In function `main':
+/tmp/cccpIDGb.o:(.data+0x0): undefined reference to `fesetprecision'
+/tmp/cccpIDGb.o: In function `main':
 /home/ma/ns-allinone-2.29/tcpap/conftest.c:85: undefined reference to `fesetprecision'
 collect2: error: ld returned 1 exit status
 configure:6902: $? = 1
@@ -1253,8 +1253,8 @@ configure:8407: $? = 0
 configure:8414: result: found
 configure:8433: checking for addr2ascii
 configure:8490: gcc -o conftest -g -O2   conftest.c -lm  >&5
-/tmp/ccsaAfyZ.o:(.data+0x0): undefined reference to `addr2ascii'
-/tmp/ccsaAfyZ.o: In function `main':
+/tmp/ccToLqbv.o:(.data+0x0): undefined reference to `addr2ascii'
+/tmp/ccToLqbv.o: In function `main':
 /home/ma/ns-allinone-2.29/tcpap/conftest.c:96: undefined reference to `addr2ascii'
 collect2: error: ld returned 1 exit status
 configure:8496: $? = 1
