@@ -4,7 +4,7 @@ static class NewRenoAPTcpClass : public TclClass {
 public:
 	NewRenoAPTcpClass() : TclClass("Agent/TCP/Newreno/AP") {}
 	TclObject* create(int, const char*const*) {
-		return (new NewRenoAPTcpAgent());
+		return (new APTcpAgent());
 	}
 } class_newreno_ap;
 
@@ -13,12 +13,14 @@ void PaceTimer::expire(Event*) {
 	a_->pace_timeout();
 }
 
-NewRenoAPTcpAgent::NewRenoAPTcpAgent() : NewRenoTcpAgent(),
+APTcpAgent::APTcpAgent() : TcpAgent(),
 	n_factor_(4), ispaced_(1), initial_pace_(0), pkts_to_send_(0),
 	samplecount_(0), rate_interval_(0.05), alpha_(0.7), 
 	gamma_(0.5), history_(50), delaybound_(0.5), ll_bandwidth_(2e6),
 	n_hop_delay_(0), avg_n_hop_delay_(0), avg_queuing_delay_(0), 
-	pace_timer_(this) {
+	pace_timer_(this), emptyCount(0), notEmptyCount(0), intoOutputCount(0),
+	maxBuffSize(0)
+	{
 	
 	bind("n_factor_", &n_factor_);
 	bind("rate_interval_", &rate_interval_);
@@ -44,7 +46,7 @@ NewRenoAPTcpAgent::NewRenoAPTcpAgent() : NewRenoTcpAgent(),
         }
 }
 
-void NewRenoAPTcpAgent::recv(Packet *pkt, Handler *hand) {
+void APTcpAgent::recv(Packet *pkt, Handler *hand) {
 	
 	hdr_tcp *tcph = hdr_tcp::access(pkt);
 	hdr_cmn *ch = hdr_cmn::access(pkt);
@@ -93,11 +95,11 @@ void NewRenoAPTcpAgent::recv(Packet *pkt, Handler *hand) {
 		}
 	}	
 	calc_variation();
-	NewRenoTcpAgent::recv(pkt, hand);
+	TcpAgent::recv(pkt, hand);
 }
 
-void NewRenoAPTcpAgent::calc_variation() {
-	
+void APTcpAgent::calc_variation() 
+{
 	double sumsamples = 0;
 	double mean = 0;
 	double dev_1 = 0;
@@ -142,21 +144,29 @@ void NewRenoAPTcpAgent::calc_variation() {
 	coeff_var_ = std_dev2 / mean;
 }
 
-void NewRenoAPTcpAgent::output(int seqno, int reason) {
+void APTcpAgent::output(int seqno, int reason) 
+{
 
 	if (ispaced_ != 1) {
-                NewRenoTcpAgent::output(seqno, reason);
+                TcpAgent::output(seqno, reason);
                 return;
         }
+        
+        intoOutputCount++;
+		
         if (reason == TCP_REASON_DUPACK) {
                 pace_timer_.force_cancel();
                 if (pkts_to_send_ > 0) {
                         pkts_to_send_ = 0;
                         ispaced_ = 0;
                 }
-                NewRenoTcpAgent::output(seqno, reason);
+                TcpAgent::output(seqno, reason);
                 return;
         }
+        
+        if (pkts_to_send_ > maxBuffSize)
+			maxBuffSize = pkts_to_send_;
+		
         seqno_[pkts_to_send_] = seqno;
         pkts_to_send_++;
         if (initial_pace_ != 1) {
@@ -165,23 +175,28 @@ void NewRenoAPTcpAgent::output(int seqno, int reason) {
         }
 }
 	
-void NewRenoAPTcpAgent::pace_timeout() 
+void APTcpAgent::pace_timeout() 
 {
 	if (ispaced_ != 1) {
 		fprintf(stderr, "Error, shouldn't be in pacing mode.\n");
 		exit(-1);
 	}
 	if (pkts_to_send_ > 0) {
-		NewRenoTcpAgent::output(seqno_[0], 0);
+		TcpAgent::output(seqno_[0], 0);
 		for (int i = 0; i < pkts_to_send_; i++) {
 			seqno_[i] = seqno_[i+1];
 		}	
 		pkts_to_send_--;
+		notEmptyCount++;
 	}	
+	else
+	{
+		emptyCount++;
+	}
 	set_pace_timer();
 }
 
-void NewRenoAPTcpAgent::set_pace_timer() {
+void APTcpAgent::set_pace_timer() {
 	
 		if (avg_n_hop_delay_ > 0.0) {
 				/* Instead of the coefficient of variation we can alternatively 
@@ -195,7 +210,7 @@ void NewRenoAPTcpAgent::set_pace_timer() {
 	pace_timer_.resched(rate_interval_);
 }
 
-void NewRenoAPTcpAgent::timeout(int tno) {
+void APTcpAgent::timeout(int tno) {
 	
 	/* retransmit timer */
 	if (tno == TCP_TIMER_RTX) {
@@ -260,3 +275,16 @@ void NewRenoAPTcpAgent::timeout(int tno) {
 	}
 }
 
+int APTcpAgent::command(int argc, const char*const* argv)
+{
+	if (argc == 2 && strcmp(argv[1], "emptyCount") == 0)
+	{
+		fprintf(stderr, "\nemptyCount:\t\t%d\n", emptyCount);
+		fprintf(stderr, "notEmptyCount:\t\t%d\n", notEmptyCount);
+		fprintf(stderr, "intopaceTimeout:\t%d\n", (emptyCount+notEmptyCount));
+		fprintf(stderr, "intoOutputCount:\t%d\n", intoOutputCount);
+		fprintf(stderr, "maxBuffSize:\t\t%d\n\n", maxBuffSize);
+		return TCL_OK;
+	}
+	return TcpAgent::command(argc, argv);
+}

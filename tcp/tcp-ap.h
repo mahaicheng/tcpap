@@ -62,24 +62,25 @@
  */ 
 #define MAXPKTS2SEND	200
 
-class NewRenoAPTcpAgent;
+class APTcpAgent;
 
 /* Pacing timer for rate-based transmission */
 class PaceTimer : public TimerHandler {
 public: 
-	PaceTimer(NewRenoAPTcpAgent *a) : TimerHandler() { a_ = a; }
+	PaceTimer(APTcpAgent *a) : a_(a) { }
 protected:
 	virtual void expire(Event *e);
-	NewRenoAPTcpAgent *a_;
+	APTcpAgent *a_;
 };
 
-class NewRenoAPTcpAgent : public virtual NewRenoTcpAgent {
+class APTcpAgent : public TcpAgent {
 friend class PaceTimer;
 public:
-	NewRenoAPTcpAgent();
+	APTcpAgent();
 	virtual void recv(Packet *pkt, Handler *);
 	virtual void timeout(int tno);
 	virtual void output(int seqno, int reason = 0);
+	virtual int command(int argc, const char* const* argv);
 
 protected:
 	virtual void pace_timeout();		/* Called after the pace timer expires */
@@ -96,6 +97,11 @@ protected:
 						   transmission range and 550m interference/cs ranges) */
 	int ispaced_;
 	int initial_pace_;
+	
+	int emptyCount;
+	int notEmptyCount;
+	int intoOutputCount;
+	int maxBuffSize;
 	
 	int samplecount_;
 	int history_;				/* n_hop_delay_ samples history size */
