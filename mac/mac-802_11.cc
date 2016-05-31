@@ -1,4 +1,4 @@
-/* -*-	Mode:C++; c-basic-offset:8; tab-width:8; indent-tabs-mode:t -*-
+﻿/* -*-	Mode:C++; c-basic-offset:8; tab-width:8; indent-tabs-mode:t -*-
  *
  * Copyright (c) 1997 Regents of the University of California.
  * All rights reserved.
@@ -187,7 +187,10 @@ MAC_MIB::MAC_MIB(Mac802_11 *parent)
 Mac802_11::Mac802_11() : 
 	Mac(), phymib_(this), macmib_(this), mhIF_(this), mhNav_(this), 
 	mhRecv_(this), mhSend_(this), 
-	mhDefer_(this), mhBackoff_(this)
+	mhDefer_(this), mhBackoff_(this),
+	RTS_send(0), CTS_recv(0), DATA_send(0), ACK_recv(0),
+	RTS_recv(0), CTS_send(0), DATA_recv(0), ACK_send(0),
+	RTS_droped(0), avg_buff_len(0.0), max_buff_len(0)
 {
 	
 	nav_ = 0.0;
@@ -230,7 +233,64 @@ Mac802_11::Mac802_11() :
 int
 Mac802_11::command(int argc, const char*const* argv)
 {
-	if (argc == 3) {
+	if (argc == 2 && strcmp(argv[1], "printavgqlen") == 0)
+	{
+printf("\n--------------------------NODE: %d--------------------\n", index_);
+
+printf("     RTS(C)_send:\t%d\n", RTS_send);
+printf("        CTS_recv:\t%d\n", CTS_recv);
+printf("       CTSC_recv:\t%d\n", CTSC_recv);
+printf("       DATA_send:\t%d\n", DATA_send);
+printf("        ACK_recv:\t%d\n\n", ACK_recv);
+
+printf("     RTS(C)_recv:\t%d\n", RTS_recv);
+printf("        CTS_send:\t%d\n", CTS_send);
+printf("       CTSC_send:\t%d\n", CTSC_send);
+printf("       DATA_recv:\t%d\n", DATA_recv);
+printf("        ACK_send:\t%d\n\n", ACK_send);
+
+printf("   RetransmitRTS:\t%d\n", macmib_.RTSFailureCount);
+printf("  RetransmitDATA:\t%d\n", macmib_.ACKFailureCount);
+printf("      RTS Droped:\t%d\n", RTS_drop);
+printf("     DATA Droped:\t%d\n\n", macmib_.FailedCount);
+
+printf("  refuse(no CTS):\t%d\n", refuse_other_rts);
+printf(" dead_lock(CTSC):\t%d\n\n", dead_lock);
+
+double RTS_fail_rate = 0.0;
+double RTS_refuse_rate = 0.0;
+double RTS_CTS_rate = 0.0;
+double DATA_fail_rate = 0.0;
+double all_success_rate = 0.0;
+
+
+if(RTS_send != 0)
+{
+    RTS_fail_rate = (double)macmib_.RTSFailureCount / RTS_send;
+
+    int RTS_send_success = RTS_send - macmib_.RTSFailureCount;
+    RTS_refuse_rate=(double)(RTS_send_success-CTS_recv-CTSC_recv)/RTS_send_success;
+    RTS_CTS_rate = (double)(CTS_recv+CTSC_recv) / RTS_send;
+    all_success_rate = (double)ACK_recv / (DATA_send + macmib_.RTSFailureCount);
+}
+else
+{
+    all_success_rate = (double)ACK_recv / DATA_send;
+}
+
+DATA_fail_rate = (double)macmib_.ACKFailureCount / DATA_send;
+
+printf("       avg_whole:\t%.2f\n",avg_whole);
+printf("       max_whole:\t%d\n", max_whole);
+printf("   RTS_fail_rate:\t%.2f%%\n", RTS_fail_rate * 100.0);
+printf(" RTS_refuse_rate:\t%.2f%%\n", RTS_refuse_rate * 100.0);
+printf("    RTS_CTS_rate:\t%.2f%%\n", RTS_CTS_rate * 100.0);
+printf("  DATA_fail_rate:\t%.2f%%\n", DATA_fail_rate * 100.0);
+printf("all_success_rate:\t%.2f%%\n\n", all_success_rate * 100.0);
+
+	return TCL_OK;
+	}
+	else if (argc == 3) {
 		if (strcmp(argv[1], "eot-target") == 0) {
 			EOTtarget_ = (NsObject*) TclObject::lookup(argv[2]);
 			if (EOTtarget_ == 0)
@@ -705,6 +765,8 @@ Mac802_11::check_pktCTRL()
                         + DSSS_MaxPropagationDelay                      // XXX
                        - phymib_.getSIFS()
                        - txtime(phymib_.getACKlen(), basicRate_);
+					   
+		CTS_send++;
 		break;
 		/*
 		 * IEEE 802.11 specs, section 9.2.8
@@ -714,6 +776,7 @@ Mac802_11::check_pktCTRL()
 	case MAC_Subtype_ACK:		
 		setTxState(MAC_ACK);
 		timeout = txtime(phymib_.getACKlen(), basicRate_);
+		ACK_send++;
 		break;
 	default:
 		fprintf(stderr, "check_pktCTRL:Invalid MAC Control subtype\n");
@@ -754,6 +817,7 @@ Mac802_11::check_pktRTS()
 		fprintf(stderr, "check_pktRTS:Invalid MAC Control subtype\n");
 		exit(1);
 	}
+	RTS_send++;
 	transmit(pktRTS_, timeout);
 	return 0;
 }
@@ -793,6 +857,7 @@ Mac802_11::check_pktTx()
 		fprintf(stderr, "check_pktTx:Invalid MAC Control subtype\n");
 		exit(1);
 	}
+	DATA_send++;
 	transmit(pktTx_, timeout);
 	return 0;
 }
@@ -1362,6 +1427,7 @@ Mac802_11::recvRTS(Packet *p)
 	 */
 	if(mhDefer_.busy()) mhDefer_.stop();
 
+	RTS_recv++;
 	tx_resume();
 
 	mac_log(p);
@@ -1409,7 +1475,9 @@ Mac802_11::recvCTS(Packet *p)
 	}
 
 	assert(pktRTS_);
-	Packet::free(pktRTS_); pktRTS_ = 0;
+	Packet::free(pktRTS_); 
+	pktRTS_ = 0;
+	CTS_recv++;
 
 	assert(pktTx_);	
 	mhSend_.stop();
@@ -1459,6 +1527,7 @@ Mac802_11::recvDATA(Packet *p)
 				discard(p, DROP_MAC_BUSY);
 				return;
 			}
+			DATA_recv++;
 			sendACK(src);
 			tx_resume();
 		} else {
@@ -1470,6 +1539,7 @@ Mac802_11::recvDATA(Packet *p)
 				discard(p, DROP_MAC_BUSY);
 				return;
 			}
+			DATA_recv++;
 			sendACK(src);
 			if(mhSend_.busy() == 0)
 				tx_resume();
@@ -1573,6 +1643,7 @@ Mac802_11::recvACK(Packet *p)
 	rst_cw();
 	Packet::free(pktTx_); 
 	pktTx_ = 0;
+	ACK_recv++;
 	
 	/*
 	 * Backoff before sending again.
@@ -1583,4 +1654,51 @@ Mac802_11::recvACK(Packet *p)
 	tx_resume();
 
 	mac_log(p);
+}
+
+void Mac802_11::statistics()
+{
+    static double start_time = 0.0;
+    static double last_time = 0.0;
+    static int last_total = 0;
+    static bool first_in = true;
+    
+    double whole_time = 0.0;
+    double duration = 0.0;
+        //record the whole length
+    int maclen = 0;
+    if(pktPre_ && pktTx_)
+	maclen = 2;
+    else if(pktPre_ || pktTx_)
+	maclen = 1;
+    else
+	maclen = 0;
+	
+    int total = p_to_prique->length()+maclen+p_aodv_agent->length_all();
+    
+    if( !first_in && (total == last_total))
+	return;
+    
+    if(total > max_whole)
+	max_whole = total;
+    
+    int now = Scheduler::instance().clock();
+
+    if(first_in)
+    {	//start_time only set when ns first enter this function
+	start_time = now;
+    }
+    if(!first_in)
+    {
+	whole_time = now - start_time;
+	duration = now - last_time;
+	
+	if(whole_time < 0.000000001)
+	    return;
+	avg_whole = (avg_whole*(last_time-start_time)+duration*last_total) / whole_time;
+    }
+      
+    last_time = now;
+    last_total = total;
+    first_in = false;
 }
