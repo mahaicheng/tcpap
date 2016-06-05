@@ -190,8 +190,9 @@ Mac802_11::Mac802_11() :
 	mhDefer_(this), mhBackoff_(this),
 	RTS_send(0), CTS_recv(0), DATA_send(0), ACK_recv(0),
 	RTS_recv(0), CTS_send(0), DATA_recv(0), ACK_send(0),
-	RTS_droped(0), avg_buff_len(0.0), max_buff_len(0)
+	RTS_droped(0)
 {
+	bind("CALLRT_", &callRoutelayer);
 	
 	nav_ = 0.0;
 	tx_state_ = rx_state_ = MAC_IDLE;
@@ -237,28 +238,22 @@ Mac802_11::command(int argc, const char*const* argv)
 	{
 printf("\n--------------------------NODE: %d--------------------\n", index_);
 
-printf("     RTS(C)_send:\t%d\n", RTS_send);
+printf("     	RTS_send:\t%d\n", RTS_send);
 printf("        CTS_recv:\t%d\n", CTS_recv);
-printf("       CTSC_recv:\t%d\n", CTSC_recv);
 printf("       DATA_send:\t%d\n", DATA_send);
 printf("        ACK_recv:\t%d\n\n", ACK_recv);
 
-printf("     RTS(C)_recv:\t%d\n", RTS_recv);
+printf("     	RTS_recv:\t%d\n", RTS_recv);
 printf("        CTS_send:\t%d\n", CTS_send);
-printf("       CTSC_send:\t%d\n", CTSC_send);
 printf("       DATA_recv:\t%d\n", DATA_recv);
 printf("        ACK_send:\t%d\n\n", ACK_send);
 
 printf("   RetransmitRTS:\t%d\n", macmib_.RTSFailureCount);
 printf("  RetransmitDATA:\t%d\n", macmib_.ACKFailureCount);
-printf("      RTS Droped:\t%d\n", RTS_drop);
+printf("      RTS Droped:\t%d\n", RTS_droped);
 printf("     DATA Droped:\t%d\n\n", macmib_.FailedCount);
 
-printf("  refuse(no CTS):\t%d\n", refuse_other_rts);
-printf(" dead_lock(CTSC):\t%d\n\n", dead_lock);
-
 double RTS_fail_rate = 0.0;
-double RTS_refuse_rate = 0.0;
 double RTS_CTS_rate = 0.0;
 double DATA_fail_rate = 0.0;
 double all_success_rate = 0.0;
@@ -269,8 +264,7 @@ if(RTS_send != 0)
     RTS_fail_rate = (double)macmib_.RTSFailureCount / RTS_send;
 
     int RTS_send_success = RTS_send - macmib_.RTSFailureCount;
-    RTS_refuse_rate=(double)(RTS_send_success-CTS_recv-CTSC_recv)/RTS_send_success;
-    RTS_CTS_rate = (double)(CTS_recv+CTSC_recv) / RTS_send;
+    RTS_CTS_rate = (double)(CTS_recv) / RTS_send;
     all_success_rate = (double)ACK_recv / (DATA_send + macmib_.RTSFailureCount);
 }
 else
@@ -280,10 +274,7 @@ else
 
 DATA_fail_rate = (double)macmib_.ACKFailureCount / DATA_send;
 
-printf("       avg_whole:\t%.2f\n",avg_whole);
-printf("       max_whole:\t%d\n", max_whole);
 printf("   RTS_fail_rate:\t%.2f%%\n", RTS_fail_rate * 100.0);
-printf(" RTS_refuse_rate:\t%.2f%%\n", RTS_refuse_rate * 100.0);
 printf("    RTS_CTS_rate:\t%.2f%%\n", RTS_CTS_rate * 100.0);
 printf("  DATA_fail_rate:\t%.2f%%\n", DATA_fail_rate * 100.0);
 printf("all_success_rate:\t%.2f%%\n\n", all_success_rate * 100.0);
@@ -1075,10 +1066,11 @@ Mac802_11::RetransmitRTS()
 	if(ssrc_ >= macmib_.getShortRetryLimit()) {
 		discard(pktRTS_, DROP_MAC_RETRY_COUNT_EXCEEDED);
 		pktRTS_ = 0;
+		RTS_droped++;
 		/* tell the callback the send operation failed 
 		   before discarding the packet */
 		hdr_cmn *ch = HDR_CMN(pktTx_);
-		if (ch->xmit_failure_) {
+		if (ch->xmit_failure_ && callRoutelayer) {
                         /*
                          *  Need to remove the MAC header so that 
                          *  re-cycled packets don't keep getting
@@ -1152,7 +1144,7 @@ Mac802_11::RetransmitDATA()
 		/* tell the callback the send operation failed 
 		   before discarding the packet */
 		hdr_cmn *ch = HDR_CMN(pktTx_);
-		if (ch->xmit_failure_) {
+		if (ch->xmit_failure_ && callRoutelayer) {
                         ch->size() -= phymib_.getHdrLen11();
 			ch->xmit_reason_ = XMIT_REASON_ACK;
                         ch->xmit_failure_(pktTx_->copy(),
@@ -1654,51 +1646,4 @@ Mac802_11::recvACK(Packet *p)
 	tx_resume();
 
 	mac_log(p);
-}
-
-void Mac802_11::statistics()
-{
-    static double start_time = 0.0;
-    static double last_time = 0.0;
-    static int last_total = 0;
-    static bool first_in = true;
-    
-    double whole_time = 0.0;
-    double duration = 0.0;
-        //record the whole length
-    int maclen = 0;
-    if(pktPre_ && pktTx_)
-	maclen = 2;
-    else if(pktPre_ || pktTx_)
-	maclen = 1;
-    else
-	maclen = 0;
-	
-    int total = p_to_prique->length()+maclen+p_aodv_agent->length_all();
-    
-    if( !first_in && (total == last_total))
-	return;
-    
-    if(total > max_whole)
-	max_whole = total;
-    
-    int now = Scheduler::instance().clock();
-
-    if(first_in)
-    {	//start_time only set when ns first enter this function
-	start_time = now;
-    }
-    if(!first_in)
-    {
-	whole_time = now - start_time;
-	duration = now - last_time;
-	
-	if(whole_time < 0.000000001)
-	    return;
-	avg_whole = (avg_whole*(last_time-start_time)+duration*last_total) / whole_time;
-    }
-      
-    last_time = now;
-    last_total = total;
-    first_in = false;
 }

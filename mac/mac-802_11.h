@@ -417,9 +417,7 @@ private:
 	
 	int RTS_droped;
 	
-	void statistics();
-	double avg_whole;
-	int max_whole;
+	int callRoutelayer;
 	
 	// END of MHC DEBUG
 };
