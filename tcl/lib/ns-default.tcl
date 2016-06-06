@@ -958,17 +958,6 @@ Agent/TCP set frto_enabled_	0 ;	# Added on 2004/10/26 for F-RTO
 Agent/TCP set sfrto_enabled_	0 ;	# Added on 2004/10/26 for F-RTO
 Agent/TCP set spurious_response_ 1 ;	# Added on 2004/10/26 for F-RTO
 
-Agent/TCP/Newreno/AP set n_factor_          4
-Agent/TCP/Newreno/AP set rate_interval_     0.05
-Agent/TCP/Newreno/AP set n_hop_delay_       0
-Agent/TCP/Newreno/AP set avg_n_hop_delay_   0
-Agent/TCP/Newreno/AP set coeff_var_         0
-Agent/TCP/Newreno/AP set adev_              0
-Agent/TCP/Newreno/AP set history_           50
-Agent/TCP/Newreno/AP set delaybound_        0.5
-Agent/TCP/Newreno/AP set alpha_             0.7
-Agent/TCP/Newreno/AP set ll_bandwidth_      2e6
-
 Agent/TCPSink set sport_        0
 Agent/TCPSink set dport_        0         
 
