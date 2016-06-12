@@ -47,7 +47,7 @@
 #include "tcp.h"
 #include "flags.h"
 #include "math.h"
-#include "random.h"
+#include "tools/random.h"
 
 #define max(a,b)        a > b ? a : b
 #define min(a,b)        a < b ? a : b
