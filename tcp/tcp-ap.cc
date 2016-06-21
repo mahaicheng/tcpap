@@ -13,7 +13,7 @@ void PaceTimer::expire(Event*) {
 	a_->pace_timeout();
 }
 
-APTcpAgent::APTcpAgent() : TcpAgent(),
+APTcpAgent::APTcpAgent() : NewRenoTcpAgent(),
 	n_factor_(4), ispaced_(1), initial_pace_(0), pkts_to_send_(0),
 	samplecount_(0), rate_interval_(0.05), alpha_(0.7), 
 	gamma_(0.5), history_(50), delaybound_(0.5), ll_bandwidth_(2e6),
@@ -95,7 +95,7 @@ void APTcpAgent::recv(Packet *pkt, Handler *hand) {
 		}
 	}	
 	calc_variation();
-	TcpAgent::recv(pkt, hand);
+	NewRenoTcpAgent::recv(pkt, hand);
 }
 
 void APTcpAgent::calc_variation() 
@@ -148,7 +148,7 @@ void APTcpAgent::output(int seqno, int reason)
 {
 
 	if (ispaced_ != 1) {
-                TcpAgent::output(seqno, reason);
+                NewRenoTcpAgent::output(seqno, reason);
                 return;
         }
         
@@ -160,7 +160,7 @@ void APTcpAgent::output(int seqno, int reason)
                         pkts_to_send_ = 0;
                         ispaced_ = 0;
                 }
-                TcpAgent::output(seqno, reason);
+                NewRenoTcpAgent::output(seqno, reason);
                 return;
         }
         
@@ -182,7 +182,7 @@ void APTcpAgent::pace_timeout()
 		exit(-1);
 	}
 	if (pkts_to_send_ > 0) {
-		TcpAgent::output(seqno_[0], 0);
+		NewRenoTcpAgent::output(seqno_[0], 0);
 		for (int i = 0; i < pkts_to_send_; i++) {
 			seqno_[i] = seqno_[i+1];
 		}	
@@ -286,5 +286,5 @@ int APTcpAgent::command(int argc, const char*const* argv)
 		fprintf(stderr, "maxBuffSize:\t\t%d\n\n", maxBuffSize);
 		return TCL_OK;
 	}
-	return TcpAgent::command(argc, argv);
+	return NewRenoTcpAgent::command(argc, argv);
 }

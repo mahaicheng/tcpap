@@ -73,7 +73,7 @@ protected:
 	APTcpAgent *a_;
 };
 
-class APTcpAgent : public TcpAgent {
+class APTcpAgent : public NewRenoTcpAgent {
 friend class PaceTimer;
 public:
 	APTcpAgent();
