@@ -37,13 +37,13 @@ APTcpAgent::APTcpAgent() : NewRenoTcpAgent(),
 		fprintf(stderr, "TCP-AP: history_ > MAXHISTORY, adjust MAXHISTORY in tcp-ap.cc\n");
 		exit(-1);
 	}
-	if (wnd_ > MAXPKTS2SEND) {
+	/*if (wnd_ > MAXPKTS2SEND) {
                 //fprintf(stderr, "TCP-AP: window_ > MAXPKTS2SEND, adjust MAXPKTS2SEND in tcp-ap.cc\n");
                 fprintf(stderr, "TCP-AP: window_ > MAXPKTS2SEND, adjust MAXPKTS2SEND in tcp-ap.cc wnd:%.9f\n", wnd_);
 		printf("-------%f--------\n", wnd_);
 		assert(0);///SEMIDEBUG
                 exit(-1);
-        }
+        }*/
 }
 
 void APTcpAgent::recv(Packet *pkt, Handler *hand) {
