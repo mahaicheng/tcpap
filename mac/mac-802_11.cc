@@ -46,8 +46,7 @@
 #include "mobilenode.h"
 
 // #define DEBUG 99
-
-#include "arp.h"
+#include<algorithm>
 #include "ll.h"
 #include "mac.h"
 #include "mac-timers.h"
@@ -190,7 +189,8 @@ Mac802_11::Mac802_11() :
 	mhDefer_(this), mhBackoff_(this),
 	RTS_send(0), CTS_recv(0), DATA_send(0), ACK_recv(0),
 	RTS_recv(0), CTS_send(0), DATA_recv(0), ACK_send(0),
-	RTS_droped(0)
+	RTS_droped(0),	receivedTime_(0.0),	receivedSeqno_(-1),
+	maxSendTime_(0.0),	minSendTime_(10000.0),	avgSendTime_(0.0)
 {
 	bind("CALLRT_", &callRoutelayer);
 	
@@ -237,6 +237,10 @@ Mac802_11::command(int argc, const char*const* argv)
 	if (argc == 2 && strcmp(argv[1], "printavgqlen") == 0)
 	{
 printf("\n--------------------------NODE: %d--------------------\n", index_);
+
+printf("avgSendTime:\t%.2f\n", avgSendTime_ * 1000);
+printf("maxSendTime:\t%.2f\n", maxSendTime_ * 1000);
+printf("minSendTime:\t%.2f\n\n", minSendTime_ * 1000);
 
 printf("     	RTS_send:\t%d\n", RTS_send);
 printf("        CTS_recv:\t%d\n", CTS_recv);
@@ -864,6 +868,11 @@ Mac802_11::sendRTS(int dst)
 	struct rts_frame *rf = (struct rts_frame*)p->access(hdr_mac::offset_);
 	
 	assert(pktTx_);
+	if (HDR_CMN(pktTx_)->ptype() == PT_TCP && HDR_CMN(pktTx_)->size() > 300)
+	{
+		receivedSeqno_ = HDR_TCP(pktTx_)->seqno();
+		receivedTime_ = Scheduler::instance().clock();
+	}
 	assert(pktRTS_ == 0);
 
 	/*
@@ -1631,6 +1640,27 @@ Mac802_11::recvACK(Packet *p)
 		ssrc_ = 0;
 	else
 		slrc_ = 0;
+	
+	if (HDR_CMN(pktTx_)->ptype() == PT_TCP && HDR_CMN(pktTx_)->size() > 300)
+	{
+		if (HDR_TCP(pktTx_)->seqno() == receivedSeqno_)
+		{
+			double now = Scheduler::instance().clock();
+			double interval = now - receivedTime_;
+			
+			minSendTime_ = std::min(interval, minSendTime_);
+			maxSendTime_ = std::max(interval, maxSendTime_);
+			
+			if (avgSendTime_ < 0.0001)
+			{
+				avgSendTime_ = interval;
+			}
+			else
+			{
+				avgSendTime_ = 0.875 * avgSendTime_ + 0.125 * interval;
+			}
+		}
+	}
 	
 	rst_cw();
 	Packet::free(pktTx_); 

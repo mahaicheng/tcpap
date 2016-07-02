@@ -417,6 +417,12 @@ private:
 	
 	int RTS_droped;
 	
+	double receivedTime_;
+	int receivedSeqno_;
+	double maxSendTime_;
+	double minSendTime_;
+	double avgSendTime_;
+	
 	int callRoutelayer;
 	
 	// END of MHC DEBUG
