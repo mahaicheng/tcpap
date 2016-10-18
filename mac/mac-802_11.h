@@ -416,6 +416,8 @@ private:
 	int ACK_send;
 	
 	int RTS_droped;
+	int retransmit_forward_data;
+	int retransmit_backward_ack;
 	
 	double receivedTime_;
 	int receivedSeqno_;

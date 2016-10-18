@@ -189,7 +189,8 @@ Mac802_11::Mac802_11() :
 	mhDefer_(this), mhBackoff_(this),
 	RTS_send(0), CTS_recv(0), DATA_send(0), ACK_recv(0),
 	RTS_recv(0), CTS_send(0), DATA_recv(0), ACK_send(0),
-	RTS_droped(0),	receivedTime_(0.0),	receivedSeqno_(-1),
+	RTS_droped(0),	retransmit_forward_data(0), retransmit_backward_ack(0),
+	receivedTime_(0.0),	receivedSeqno_(-1),
 	maxSendTime_(0.0),	minSendTime_(10000.0),	avgSendTime_(0.0)
 {
 	bind("CALLRT_", &callRoutelayer);
@@ -254,6 +255,8 @@ printf("        ACK_send:\t%d\n\n", ACK_send);
 
 printf("   RetransmitRTS:\t%d\n", macmib_.RTSFailureCount);
 printf("  RetransmitDATA:\t%d\n", macmib_.ACKFailureCount);
+printf("retransmit_forward_data:\t%d\n", retransmit_forward_data);
+printf("retransmit_backward_ack:\t%d\n", retransmit_backward_ack);
 printf("      RTS Droped:\t%d\n", RTS_droped);
 printf("     DATA Droped:\t%d\n\n", macmib_.FailedCount);
 
@@ -1135,6 +1138,15 @@ Mac802_11::RetransmitDATA()
 	}
 
 	macmib_.ACKFailureCount++;
+	
+	if (ch->ptype() == PT_ACK)
+	{
+		retransmit_backward_ack++;
+	}
+	else
+	{
+		retransmit_forward_data++;
+	}
 
 	if((u_int32_t) ch->size() <= macmib_.getRTSThreshold()) {
                 rcount = &ssrc_;
